@@ -1,63 +1,41 @@
+ # .github/workflows/ci.yml
 
-# tests/test_snake_game.py
+name: Python CI for Snake Game
 
-import pytest
-from snake_game import Snake, Game
+on:
+  push:
+    branches: [ "main", "develop" ] # Triggers on push to main or develop branch
+  pull_request:
+    branches: [ "main", "develop" ] # Triggers on pull requests targeting main or develop
 
-def test_initial_snake_position():
-    snake = Snake(start_pos=(5, 5))
-    assert snake.body == [(5, 5)]
-    assert snake.direction == "RIGHT"
-    assert snake.score == 0
+jobs:
+  build:
+    runs-on: ubuntu-latest # Specifies the operating system for the job
 
-def test_snake_movement_right():
-    snake = Snake(start_pos=(0, 0))
-    snake.move()
-    assert snake.body == [(1, 0)] # Moved right
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4 # Action to check out your repository code
 
-def test_snake_movement_up():
-    snake = Snake(start_pos=(5, 5))
-    snake.change_direction("UP")
-    snake.move()
-    assert snake.body == [(5, 4)] # Moved up
+      - name: Set up Python
+        uses: actions/setup-python@v5 # Action to set up a Python environment
+        with:
+          python-version: '3.9' # Specify the Python version
 
-def test_snake_cannot_reverse_direction():
-    snake = Snake(start_pos=(5,5))
-    snake.change_direction("LEFT") # Current direction is LEFT
-    snake.change_direction("RIGHT") # Try to reverse
-    assert snake.direction == "LEFT" # Should still be LEFT
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt # Installs pytest, flake8, mypy etc. from requirements.txt
 
-def test_snake_grows_on_eating_food():
-    game = Game(width=10, height=10)
-    game.snake = Snake(start_pos=(1, 0)) # Position snake to eat food
-    game.place_food() # Food is at (1,1)
-    game.snake.change_direction("DOWN") # Move towards food
+      - name: Run Linting (Flake8)
+        run: |
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics # Errors and common issues
+          flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics # Style issues, exit-zero to allow tests to run even with style warnings
 
-    initial_length = len(game.snake.body)
-    initial_score = game.snake.score
+      - name: Run Type Checking (Mypy)
+        run: |
+          mypy . # Check for type consistency
 
-    game.update_game_state() # Snake moves and eats food
-
-    assert len(game.snake.body) == initial_length + 1
-    assert game.snake.score == initial_score + 1
-    assert game.food_pos is not None # New food should be placed
-
-def test_game_over_on_wall_collision():
-    game = Game(width=10, height=10)
-    game.snake = Snake(start_pos=(0,0)) # Snake at top-left corner
-    game.snake.change_direction("LEFT") # Try to move out of bounds
-
-    game_active = game.update_game_state()
-    assert game.game_over is True
-    assert game_active is False
-
-def test_game_over_on_self_collision():
-    game = Game(width=3, height=3) # Small board for easy collision
-    game.snake = Snake(start_pos=(1,1))
-    # Make snake long enough to collide with itself immediately
-    game.snake.body = [(1,1), (1,2), (0,2), (0,1), (0,0), (1,0)] # A loop
-    game.snake.change_direction("RIGHT") # Next move will hit (1,1)
-
-    game_active = game.update_game_state()
-    assert game.game_over is True
-    assert game_active is False
+      - name: Run Pytest Tests
+        run: |
+          pytest --cov=. --cov-report=xml # Run tests and generate coverage report (optional)
+          # pytest # If you don't need coverage
